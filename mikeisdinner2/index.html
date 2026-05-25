@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>MIKE IS DINNER 2</title>
+    <meta name="description" content="A new self-contained Mike Is Dinner sequel with five-night escape horror mechanics.">
+    <meta name="theme-color" content="#06070a">
+    <link rel="icon" href="game_icon.png">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff; font-family: Arial, Helvetica, sans-serif; }
+        canvas { position: fixed; inset: 0; z-index: 1; }
+        #ui { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+        .screen { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: radial-gradient(circle at 50% 38%, rgba(24,24,28,.92), rgba(0,0,0,.98) 68%); pointer-events: auto; text-align: center; padding: 18px; }
+        .screen.active { display: flex; }
+        h1 { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-size: clamp(3rem, 12vw, 7rem); letter-spacing: .12em; color: #cc0000; text-shadow: 0 0 12px #f00, 0 0 42px #600; margin-bottom: 8px; }
+        .tag { color: #b6b6b6; letter-spacing: .28em; text-transform: uppercase; margin-bottom: 24px; font-size: .9rem; }
+        .panel { width: min(520px, 94vw); border: 1px solid #333; background: rgba(0,0,0,.76); padding: 24px; box-shadow: 0 0 38px rgba(0,0,0,.65); }
+        .menu-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 12px 0 18px; }
+        @media (min-width: 560px) { .menu-grid { grid-template-columns: repeat(3, 1fr); } }
+        button { min-height: 44px; border: 1px solid #555; background: #070707; color: #eee; padding: 10px 14px; text-transform: uppercase; letter-spacing: .16em; font-weight: 800; cursor: pointer; }
+        button:hover, button.selected { border-color: #e00000; color: #fff; box-shadow: 0 0 16px rgba(255,0,0,.35); }
+        .instructions { color: #aaa; font-size: .86rem; line-height: 1.65; margin-top: 14px; }
+        .danger { color: #ff5656; }
+        #hud { position: absolute; inset: 0; display: none; pointer-events: none; }
+        #hud.active { display: block; }
+        #night { position: absolute; left: 18px; top: 16px; letter-spacing: .18em; text-transform: uppercase; font-weight: 900; text-shadow: 0 0 8px #000; }
+        #task { position: absolute; left: 18px; top: 48px; max-width: min(460px, calc(100vw - 36px)); color: #cfcfcf; background: rgba(0,0,0,.55); border-left: 3px solid #b40000; padding: 8px 12px; font-size: .9rem; }
+        #holding { position: absolute; left: 18px; bottom: 18px; background: rgba(0,0,0,.65); border: 1px solid #333; border-left: 3px solid #b40000; padding: 10px 14px; }
+        #meters { position: absolute; right: 18px; top: 16px; width: 170px; display: grid; gap: 8px; }
+        .meter { height: 12px; border: 1px solid #444; background: #080808; }
+        .fill { height: 100%; width: 100%; background: linear-gradient(90deg, #a60000, #ff6a00); }
+        #batteryFill { background: linear-gradient(90deg, #916700, #ffe05a); }
+        #prompt { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); background: rgba(0,0,0,.78); border-left: 3px solid #c00; padding: 14px 18px; min-width: 260px; display: none; text-align: left; }
+        #crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); }
+        #crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,.7); }
+        #crosshair::before { width: 2px; height: 18px; left: 8px; }
+        #crosshair::after { width: 18px; height: 2px; top: 8px; }
+        #vignette { position: absolute; inset: 0; background: radial-gradient(circle, transparent 38%, rgba(180,0,0,.9)); opacity: 0; transition: opacity .12s; }
+        .touch-zone { position: absolute; bottom: 0; width: 42vw; height: 48vh; pointer-events: auto; display: none; }
+        #moveZone { left: 0; }
+        #lookZone { right: 0; }
+        .mobile-btn { position: absolute; right: 18px; width: 62px; height: 62px; border-radius: 50%; pointer-events: auto; display: none; font-size: .75rem; letter-spacing: .05em; background: rgba(0,0,0,.55); }
+        #useBtn { bottom: 90px; }
+        #dropBtn { bottom: 160px; }
+        #hideBtn { bottom: 230px; }
+        #runBtn { bottom: 300px; }
+        @media (max-width: 768px), (pointer: coarse) {
+            .touch-zone, .mobile-btn { display: block; }
+            #crosshair { display: none; }
+            #meters { top: auto; bottom: 18px; right: 18px; }
+            #holding { bottom: 92px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <section id="menu" class="screen active">
+            <div class="panel">
+                <h1>MIKE IS DINNER 2</h1>
+                <div class="tag">The House Remembers</div>
+                <div class="menu-grid">
+                    <button class="mode" data-mode="practice">Practice</button>
+                    <button class="mode" data-mode="easy">Easy</button>
+                    <button class="mode selected" data-mode="normal">Normal</button>
+                    <button class="mode" data-mode="nightmare">Nightmare</button>
+                    <button class="mode" data-mode="accomplice">Accomplice</button>
+                </div>
+                <button id="startBtn">Start Night 1</button>
+                <div class="instructions">
+                    <p>WASD move, mouse look, click interact/shoot, Q drop, Shift run, H hide.</p>
+                    <p>Mobile has left move joystick, right look joystick, and action buttons.</p>
+                    <p>Accomplice: 20 monsters, machine gun, 8 bullets to kill each monster, 5 hits kills you.</p>
+                    <p class="danger">Find the 5 escape parts. Teddy and pets make the monsters' eyes turn red.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="dead" class="screen">
+            <div class="panel">
+                <h1>YOU DIED</h1>
+                <p class="tag">Mike found dinner.</p>
+                <button id="retryBtn">Try Again</button>
+            </div>
+        </section>
+
+        <section id="win" class="screen">
+            <div class="panel">
+                <h1 style="color:#00d35f;text-shadow:0 0 20px #00d35f;">ESCAPED</h1>
+                <p class="tag">You survived the second dinner.</p>
+                <button id="menuBtn">Main Menu</button>
+            </div>
+        </section>
+
+        <div id="hud">
+            <div id="night">Night 1</div>
+            <div id="task">Find parts for the basement generator. Escape before Night 5 ends.</div>
+            <div id="meters">
+                <div class="meter"><div id="staminaFill" class="fill"></div></div>
+                <div class="meter"><div id="batteryFill" class="fill"></div></div>
+            </div>
+            <div id="holding">Holding: <span id="held">Nothing</span></div>
+            <div id="prompt"></div>
+            <div id="crosshair"></div>
+            <div id="vignette"></div>
+            <div id="moveZone" class="touch-zone"></div>
+            <div id="lookZone" class="touch-zone"></div>
+            <button id="useBtn" class="mobile-btn">Use</button>
+            <button id="dropBtn" class="mobile-btn">Drop</button>
+            <button id="hideBtn" class="mobile-btn">Hide</button>
+            <button id="runBtn" class="mobile-btn">Run</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        const ui = {
+            menu: document.getElementById('menu'), dead: document.getElementById('dead'), win: document.getElementById('win'),
+            hud: document.getElementById('hud'), night: document.getElementById('night'), task: document.getElementById('task'),
+            held: document.getElementById('held'), prompt: document.getElementById('prompt'), vignette: document.getElementById('vignette'),
+            stamina: document.getElementById('staminaFill'), battery: document.getElementById('batteryFill')
+        };
+
+        const state = {
+            mode: 'normal', running: false, night: 1, held: null, installed: new Set(), rage: false,
+            stamina: 100, battery: 100, hidden: false, messageTimer: 0, health: 5, ammo: 160, kills: 0, safeTimer: 0
+        };
+
+        let scene, camera, renderer, clock;
+        let walls = [], items = [], lockers = [], pets = [], exits = [], monsters = [];
+        let yaw = 0, pitch = 0, player = new THREE.Vector3(0, 1.6, 8);
+        const keys = {};
+        const ray = new THREE.Raycaster();
+        const center = new THREE.Vector2(0, 0);
+        const moveTouch = { active: false, x: 0, y: 0, sx: 0, sy: 0 };
+        const lookTouch = { active: false, x: 0, y: 0, sx: 0, sy: 0 };
+
+        document.querySelectorAll('.mode').forEach(btn => btn.addEventListener('click', () => {
+            document.querySelectorAll('.mode').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            state.mode = btn.dataset.mode;
+        }));
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('retryBtn').addEventListener('click', startGame);
+        document.getElementById('menuBtn').addEventListener('click', showMenu);
+        document.getElementById('useBtn').addEventListener('pointerdown', () => state.mode === 'accomplice' ? shootGun() : interact());
+        document.getElementById('dropBtn').addEventListener('pointerdown', dropItem);
+        document.getElementById('hideBtn').addEventListener('pointerdown', toggleHide);
+        document.getElementById('runBtn').addEventListener('pointerdown', () => keys.shift = true);
+        document.getElementById('runBtn').addEventListener('pointerup', () => keys.shift = false);
+        window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key === ' ') e.preventDefault(); });
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        document.body.addEventListener('click', () => { if (state.running && innerWidth > 768) document.body.requestPointerLock(); });
+        document.body.addEventListener('mousedown', e => {
+            if (!state.running || e.button !== 0 || document.pointerLockElement !== document.body) return;
+            if (state.mode === 'accomplice') shootGun();
+            else interact();
+        });
+        document.body.addEventListener('mousemove', e => {
+            if (document.pointerLockElement !== document.body || !state.running || state.hidden) return;
+            yaw -= e.movementX * .0024;
+            pitch = Math.max(-1.2, Math.min(1.2, pitch - e.movementY * .0024));
+        });
+
+        setupTouch('moveZone', moveTouch, false);
+        setupTouch('lookZone', lookTouch, true);
+
+        function setupTouch(id, data, isLook) {
+            const el = document.getElementById(id);
+            el.addEventListener('pointerdown', e => { data.active = true; data.sx = e.clientX; data.sy = e.clientY; el.setPointerCapture(e.pointerId); });
+            el.addEventListener('pointermove', e => {
+                if (!data.active) return;
+                data.x = Math.max(-1, Math.min(1, (e.clientX - data.sx) / 58));
+                data.y = Math.max(-1, Math.min(1, (e.clientY - data.sy) / 58));
+                if (isLook) { yaw -= data.x * .045; pitch = Math.max(-1.2, Math.min(1.2, pitch - data.y * .035)); data.sx = e.clientX; data.sy = e.clientY; data.x = 0; data.y = 0; }
+            });
+            el.addEventListener('pointerup', () => { data.active = false; data.x = 0; data.y = 0; });
+            el.addEventListener('pointercancel', () => { data.active = false; data.x = 0; data.y = 0; });
+        }
+
+        function startGame() {
+            hideScreens();
+            ui.hud.classList.add('active');
+            state.running = true; state.night = 1; state.held = null; state.installed = new Set(); state.rage = false;
+            state.stamina = 100; state.battery = 100; state.hidden = false; state.health = 5; state.ammo = 160; state.kills = 0; state.safeTimer = 3;
+            initWorld();
+            if (innerWidth > 768) document.body.requestPointerLock();
+        }
+
+        function showMenu() {
+            state.running = false;
+            hideScreens();
+            ui.menu.classList.add('active');
+            ui.hud.classList.remove('active');
+            document.exitPointerLock?.();
+        }
+
+        function hideScreens() { [ui.menu, ui.dead, ui.win].forEach(s => s.classList.remove('active')); }
+
+        function initWorld() {
+            if (renderer) renderer.domElement.remove();
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x05070a);
+            scene.fog = new THREE.FogExp2(0x05070a, .018);
+            camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, .1, 120);
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(innerWidth, innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.prepend(renderer.domElement);
+            clock = new THREE.Clock();
+            walls = []; items = []; lockers = []; pets = []; exits = []; monsters = [];
+            player.set(0, 1.6, 11.2); yaw = Math.PI; pitch = 0;
+
+            scene.add(new THREE.AmbientLight(0xb8c0cc, .9));
+            const moon = new THREE.DirectionalLight(0xb8c7ff, .62);
+            moon.position.set(8, 14, 4); moon.castShadow = true; scene.add(moon);
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(29, 29), new THREE.MeshStandardMaterial({ color: 0x1b1b1c, roughness: 1 }));
+            floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+            buildHouse();
+            spawnItems();
+            spawnMonsters();
+            animate();
+        }
+
+        function mat(color, emissive = 0x000000) { return new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: emissive ? .65 : 0, roughness: .9 }); }
+        function box(x, y, z, w, h, d, color, list = walls) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+            m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; scene.add(m); list.push(m); return m;
+        }
+        function buildHouse() {
+            box(0, 1.8, -14, 28, 3.6, .6, 0x2d2d30); box(0, 1.8, 14, 28, 3.6, .6, 0x2d2d30);
+            box(-14, 1.8, 0, .6, 3.6, 28, 0x2d2d30); box(14, 1.8, 0, .6, 3.6, 28, 0x2d2d30);
+            [-7, 0, 7].forEach(x => {
+                box(x, 1.5, -7.5, .45, 3, 5, 0x242427);
+                box(x, 1.5, 7.5, .45, 3, 5, 0x242427);
+            });
+            [-7, 7].forEach(z => {
+                box(-7.5, 1.5, z, 5, 3, .45, 0x242427);
+                box(7.5, 1.5, z, 5, 3, .45, 0x242427);
+            });
+            box(0, .08, -16, 5, .16, 1.2, 0x111111, []);
+            const exit = box(0, 1.35, -14.35, 3.2, 2.7, .35, 0x2a2020, []);
+            exit.userData = { type: 'exit', name: 'Basement Exit', desc: 'Install 5 parts to unlock the exit.' };
+            exits.push(exit);
+            const points = [[-11,0,-11], [11,0,-11], [-11,0,11], [11,0,11], [0,0,0]];
+            points.forEach((p, i) => {
+                const l = box(p[0], 1.2, p[2], 1.4, 2.4, 1.0, 0x151515, []);
+                l.userData = { type: 'locker', name: `Locker ${i + 1}`, desc: 'Hide here until the footsteps pass.' };
+                lockers.push(l);
+            });
+            [[-9,-9], [9,-9], [-9,9], [9,9], [0,0], [0,-11]].forEach((p, i) => {
+                const bulb = new THREE.PointLight(i === 5 ? 0xffd6a0 : 0xdde8ff, 1.9, 14);
+                bulb.position.set(p[0], 3.1, p[1]);
+                scene.add(bulb);
+                const fixture = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, .06, 16), new THREE.MeshBasicMaterial({ color: 0xffffdd }));
+                fixture.position.copy(bulb.position);
+                scene.add(fixture);
+            });
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(28, 28), new THREE.MeshStandardMaterial({ color: 0x171719, roughness: 1, side: THREE.DoubleSide }));
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 3.55;
+            scene.add(ceiling);
+            [[-10,0,4,1.1,2.2], [10,0,4,1.1,2.2], [0,-10,5,1.1,1.4], [-4,4,2.8,.8,1.2], [5,6,2.4,.8,1.2]].forEach((f, i) => {
+                const table = box(f[0], .38, f[1], f[2], .35, f[3], i % 2 ? 0x3a2d25 : 0x26282b, []);
+                table.userData = { type: 'furniture' };
+            });
+            [[-4,-11], [4,-11], [-11,4], [11,-4], [4,11]].forEach(p => {
+                const carpet = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.7), new THREE.MeshStandardMaterial({ color: 0x302225, roughness: 1 }));
+                carpet.rotation.x = -Math.PI / 2;
+                carpet.position.set(p[0], .012, p[1]);
+                scene.add(carpet);
+            });
+        }
+
+        function makeItem(id, name, x, z, color) {
+            const g = new THREE.Group();
+            if (id === 'part') {
+                const n = Number(name.match(/\d+/)?.[0] || 1);
+                if (n === 1) {
+                    const base = new THREE.Mesh(new THREE.BoxGeometry(.58, .28, .34), mat(0x2f3b46, 0x182838)); g.add(base);
+                    const cap = new THREE.Mesh(new THREE.BoxGeometry(.22, .34, .2), mat(0xf4c542, 0x5b4300)); cap.position.x = .18; g.add(cap);
+                } else if (n === 2) {
+                    const coil = new THREE.Mesh(new THREE.TorusGeometry(.24, .045, 10, 24), mat(0xb8b8b8)); coil.rotation.x = Math.PI / 2; g.add(coil);
+                    const plug = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, .45, 12), mat(0xdddddd)); plug.rotation.z = Math.PI / 2; g.add(plug);
+                } else if (n === 3) {
+                    const fuse = new THREE.Mesh(new THREE.CylinderGeometry(.09, .09, .56, 16), mat(0xe8eef2, 0x2e4f55)); fuse.rotation.z = Math.PI / 2; g.add(fuse);
+                    [-.34, .34].forEach(px => { const end = new THREE.Mesh(new THREE.CylinderGeometry(.1, .1, .08, 16), mat(0xb08d32)); end.rotation.z = Math.PI / 2; end.position.x = px; g.add(end); });
+                } else if (n === 4) {
+                    const key = new THREE.Mesh(new THREE.TorusGeometry(.16, .035, 10, 20), mat(0xd8b04c, 0x4d3600)); key.rotation.y = Math.PI / 2; g.add(key);
+                    const stem = new THREE.Mesh(new THREE.BoxGeometry(.42, .07, .07), mat(0xd8b04c, 0x4d3600)); stem.position.x = .28; g.add(stem);
+                } else {
+                    const tank = new THREE.Mesh(new THREE.BoxGeometry(.42, .5, .26), mat(0x9b1b1b, 0x3b0000)); g.add(tank);
+                    const handle = new THREE.Mesh(new THREE.TorusGeometry(.14, .025, 8, 16), mat(0x1c1c1c)); handle.position.y = .31; handle.rotation.x = Math.PI / 2; g.add(handle);
+                }
+                const glow = new THREE.PointLight(0xffd36b, .9, 4); glow.position.y = .35; g.add(glow);
+            } else if (id === 'teddy') {
+                const fur = mat(0x8a5a2b);
+                const bellyMat = mat(0xd2a06c);
+                const body = new THREE.Mesh(new THREE.SphereGeometry(.24, 14, 14), fur); body.scale.set(1, 1.25, .8); g.add(body);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(.18, 14, 14), fur); head.position.y = .28; g.add(head);
+                [-.14, .14].forEach(px => { const ear = new THREE.Mesh(new THREE.SphereGeometry(.075, 10, 10), fur); ear.position.set(px, .42, 0); g.add(ear); });
+                const belly = new THREE.Mesh(new THREE.SphereGeometry(.13, 10, 10), bellyMat); belly.scale.set(1, 1.1, .25); belly.position.set(0, -.02, .18); g.add(belly);
+            } else if (id === 'pet') {
+                const petMat = mat(0x20242a);
+                const body = new THREE.Mesh(new THREE.SphereGeometry(.2, 12, 12), petMat); body.scale.set(1.6, .55, .85); g.add(body);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(.11, 10, 10), petMat); head.position.set(.28, .04, 0); g.add(head);
+                const tail = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .32, 8), petMat); tail.rotation.z = Math.PI / 2.5; tail.position.set(-.3, .06, 0); g.add(tail);
+                const eye = new THREE.Mesh(new THREE.SphereGeometry(.025, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff4444 })); eye.position.set(.36, .08, -.07); g.add(eye);
+            }
+            g.position.set(x, .6, z);
+            g.userData = { type: 'item', id, name };
+            g.children.forEach(c => c.userData = g.userData);
+            scene.add(g); items.push(g); return g;
+        }
+        function spawnItems() {
+            [[-10,-9], [10,-8], [-9,9], [9,8], [0,11]].forEach((p, i) => makeItem('part', `Generator Part ${i + 1}`, p[0], p[1], 0xc8a23a));
+            makeItem('teddy', "Sister's Teddy", -2, -10, 0x8a5a2b);
+            [[-5,4], [6,-4]].forEach((p, i) => {
+                const pet = makeItem('pet', `Monster Pet ${i + 1}`, p[0], p[1], 0x15151a);
+                pet.userData.type = 'pet'; pet.children.forEach(c => c.userData = pet.userData); pets.push(pet);
+            });
+        }
+
+        function spawnMonsters() {
+            if (state.mode === 'accomplice') {
+                for (let i = 0; i < 20; i++) {
+                    const angle = (i / 20) * Math.PI * 2;
+                    const radius = 7 + (i % 4) * 2.2;
+                    monsters.push(makeMonster(`MONSTER ${i + 1}`, Math.cos(angle) * radius, Math.sin(angle) * radius, i % 2 ? 0xff3300 : 0xff0000, .62));
+                }
+                flash('Accomplice mode: machine gun ready. 160 ammo. Kill all 20.');
+                return;
+            }
+            monsters.push(makeMonster('MIKE', 5, 6, 0xff0000, 1.12));
+            monsters.push(makeMonster('THE WARDEN', -6, -5, 0x3388ff, .98));
+        }
+        function makeMonster(name, x, z, eyeColor, speedFactor) {
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CapsuleGeometry(.48, 1.25, 4, 10), mat(0x171719)); body.position.y = .82; g.add(body);
+            const chest = new THREE.Mesh(new THREE.BoxGeometry(.55, .5, .12), mat(0x2a2a2d)); chest.position.set(0, .95, -.42); g.add(chest);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(.36, 14, 14), mat(0x111113)); head.position.y = 1.68; g.add(head);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
+            [-.12, .12].forEach(ex => { const e = new THREE.Mesh(new THREE.SphereGeometry(.055, 8, 8), eyeMat); e.position.set(ex, 1.67, -.31); g.add(e); });
+            const light = new THREE.PointLight(eyeColor, 2.4, 8); light.position.set(0, 1.68, -.35); g.add(light);
+            [-.42, .42].forEach(px => { const arm = new THREE.Mesh(new THREE.CylinderGeometry(.055, .07, 1.15, 8), mat(0x0b0b0c)); arm.position.set(px, .72, 0); arm.rotation.z = px > 0 ? -.25 : .25; g.add(arm); });
+            g.position.set(x, 0, z); scene.add(g);
+            return { name, group: g, eyeMat, light, speedFactor, target: player.clone(), patrolTimer: 0, catchCooldown: 0, hp: 8, dead: false };
+        }
+
+        function animate() {
+            if (!state.running) return;
+            const dt = Math.min(clock.getDelta(), .05);
+            state.safeTimer = Math.max(0, state.safeTimer - dt);
+            updatePlayer(dt); updateItems(dt); updateMonsters(dt); updateHUD();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        function updatePlayer(dt) {
+            camera.rotation.set(pitch, yaw, 0, 'YXZ');
+            if (state.hidden) { camera.position.y = 1.05; return; }
+            const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+            const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+            const move = new THREE.Vector3();
+            if (keys.w || keys.arrowup) move.sub(forward);
+            if (keys.s || keys.arrowdown) move.add(forward);
+            if (keys.a || keys.arrowleft) move.sub(right);
+            if (keys.d || keys.arrowright) move.add(right);
+            if (moveTouch.active) { move.add(right.clone().multiplyScalar(moveTouch.x)); move.add(forward.clone().multiplyScalar(moveTouch.y)); }
+            const running = !!keys.shift && state.stamina > 0 && move.lengthSq() > 0;
+            const speed = running ? 7 : 3.4;
+            if (running) state.stamina = Math.max(0, state.stamina - 26 * dt); else state.stamina = Math.min(100, state.stamina + 12 * dt);
+            if (move.lengthSq()) {
+                move.normalize().multiplyScalar(speed * dt);
+                const next = player.clone().add(move);
+                if (!collides(next)) player.copy(next);
+            }
+            camera.position.copy(player);
+            if (keys.h) { keys.h = false; toggleHide(); }
+            if (keys.q) { keys.q = false; dropItem(); }
+            if (keys.e) { keys.e = false; interact(); }
+            findTarget();
+        }
+
+        function collides(pos) {
+            if (Math.abs(pos.x) > 13.15 || Math.abs(pos.z) > 13.15) return true;
+            return walls.some(w => Math.abs(pos.x - w.position.x) < w.geometry.parameters.width / 2 + .35 && Math.abs(pos.z - w.position.z) < w.geometry.parameters.depth / 2 + .35);
+        }
+
+        function hasLineOfSight(from, to) {
+            const origin = new THREE.Vector3(from.x, 1.05, from.z);
+            const targetPos = new THREE.Vector3(to.x, 1.05, to.z);
+            const dir = targetPos.clone().sub(origin);
+            const dist = dir.length();
+            if (dist <= 0.01) return true;
+            ray.set(origin, dir.normalize());
+            return !ray.intersectObjects(walls, false).some(hit => hit.distance < dist - .35);
+        }
+
+        let target = null;
+        function findTarget() {
+            target = null; ui.prompt.style.display = 'none';
+            ray.setFromCamera(center, camera);
+            const hits = ray.intersectObjects([...items, ...lockers, ...pets, ...exits].flatMap(o => [o, ...o.children]), true);
+            const hit = hits.find(h => h.distance < 3.2 && h.object.userData?.type);
+            if (!hit) return;
+            target = hit.object.parent?.userData?.type ? hit.object.parent : hit.object;
+            const u = target.userData;
+            ui.prompt.style.display = 'block';
+            ui.prompt.innerHTML = `<strong>${u.name}</strong><br>${u.desc || (u.type === 'item' ? 'Click to pick up.' : 'Click to use.')}`;
+        }
+
+        function interact() {
+            if (state.mode === 'accomplice') return shootGun();
+            if (!target) return;
+            const u = target.userData;
+            if (u.type === 'item') {
+                if (state.held) return flash('Hands full. Drop your item first.');
+                state.held = { id: u.id, name: u.name };
+                scene.remove(target); items = items.filter(i => i !== target);
+                if (u.id === 'teddy') enrage("You touched Sister's Teddy.");
+            } else if (u.type === 'pet') {
+                scene.remove(target); items = items.filter(i => i !== target); pets = pets.filter(i => i !== target);
+                enrage('You killed a monster pet.');
+            } else if (u.type === 'locker') {
+                state.hidden = !state.hidden; player.set(target.position.x, 1.6, target.position.z + 1.1); flash(state.hidden ? 'Hidden.' : 'Out of hiding.');
+            } else if (u.type === 'exit') {
+                if (state.held?.id === 'part') installPart();
+                else if (state.installed.size >= 5) win();
+                else flash(`Exit locked. ${state.installed.size}/5 parts installed.`);
+            }
+        }
+
+        function installPart() {
+            if (!state.held || state.held.id !== 'part') return;
+            state.installed.add(state.held.name);
+            state.held = null;
+            flash(`Part installed. ${state.installed.size}/5`);
+        }
+
+        function dropItem() {
+            if (!state.held) return;
+            makeItem(state.held.id, state.held.name, player.x + Math.sin(yaw) * -1.2, player.z + Math.cos(yaw) * -1.2, state.held.id === 'teddy' ? 0x8a5a2b : 0xc8a23a);
+            state.held = null;
+            monsters.forEach(m => m.target.copy(player));
+        }
+
+        function toggleHide() {
+            const near = lockers.find(l => player.distanceTo(l.position) < 2.6);
+            if (!near) return flash('Find a locker to hide.');
+            state.hidden = !state.hidden;
+            player.set(near.position.x, 1.6, near.position.z + 1.1);
+            flash(state.hidden ? 'Hidden.' : 'Out of hiding.');
+        }
+
+        function enrage(msg) {
+            state.rage = true;
+            monsters.forEach(m => { m.eyeMat.color.setHex(0xff0000); m.light.color.setHex(0xff0000); m.light.intensity = 3.4; m.target.copy(player); });
+            flash(`${msg} Red eyes mode.`);
+        }
+
+        function shootGun() {
+            if (state.ammo <= 0) return flash('Out of ammo.');
+            state.ammo--;
+            ray.setFromCamera(center, camera);
+            const hits = ray.intersectObjects(monsters.filter(m => !m.dead).map(m => m.group), true);
+            const hit = hits.find(h => h.distance < 34);
+            if (!hit) return flash(`Ammo: ${state.ammo}`);
+            let monster = monsters.find(m => {
+                let obj = hit.object;
+                while (obj) {
+                    if (obj === m.group) return true;
+                    obj = obj.parent;
+                }
+                return false;
+            });
+            if (!monster) return;
+            monster.hp--;
+            monster.light.intensity = 4;
+            setTimeout(() => { if (!monster.dead) monster.light.intensity = state.rage ? 3.4 : 2.4; }, 80);
+            if (monster.hp <= 0) {
+                monster.dead = true;
+                monster.group.visible = false;
+                state.kills++;
+                flash(`Monster down. ${state.kills}/20 killed. Ammo: ${state.ammo}`);
+                if (state.kills >= 20) win();
+            } else {
+                flash(`${monster.name} hit. ${monster.hp}/8 health left. Ammo: ${state.ammo}`);
+            }
+        }
+
+        function updateMonsters(dt) {
+            let closest = Infinity;
+            monsters.forEach(m => {
+                if (m.dead) return;
+                m.catchCooldown = Math.max(0, m.catchCooldown - dt);
+                const playerDist = m.group.position.distanceTo(player);
+                m.patrolTimer -= dt;
+                const canSeePlayer = hasLineOfSight(m.group.position, player);
+                if (state.mode === 'practice') {
+                    m.target.copy(m.group.position);
+                } else if (!state.hidden && playerDist < 28 && canSeePlayer) {
+                    m.target.copy(player);
+                } else if (m.patrolTimer <= 0) {
+                    m.target.set((Math.random() - .5) * 24, 0, (Math.random() - .5) * 24);
+                    m.patrolTimer = 2.2 + Math.random() * 2.2;
+                }
+                const dir = m.target.clone().sub(m.group.position); dir.y = 0;
+                if (dir.length() < .4) {
+                    m.target.set((Math.random() - .5) * 24, 0, (Math.random() - .5) * 24);
+                    m.patrolTimer = 1.2;
+                }
+                else {
+                    dir.normalize();
+                    let baseSpeed = 2.35;
+                    if (state.mode === 'easy') baseSpeed = 1.55;
+                    if (state.mode === 'nightmare') baseSpeed = 3.55;
+                    if (state.mode === 'accomplice') baseSpeed = 1.9;
+                    const speed = baseSpeed * m.speedFactor * (state.rage ? 1.35 : 1);
+                    m.group.position.add(dir.multiplyScalar(speed * dt));
+                    m.group.rotation.y = Math.atan2(dir.x, dir.z);
+                    m.group.position.y = Math.abs(Math.sin(performance.now() * .006 * m.speedFactor)) * .05;
+                }
+                const d = m.group.position.distanceTo(player);
+                closest = Math.min(closest, d);
+                if (state.mode !== 'practice' && state.safeTimer <= 0 && !state.hidden && d < 1.75 && canSeePlayer && m.catchCooldown <= 0) {
+                    m.catchCooldown = 2;
+                    if (state.mode === 'accomplice') monsterPunch(m.name);
+                    else caughtBy(m.name);
+                }
+            });
+            ui.vignette.style.opacity = Math.max(0, 1 - closest / 10) * .8;
+        }
+
+        function monsterPunch(name) {
+            state.health--;
+            flash(`${name} punched you. Health: ${state.health}/5`);
+            player.x += (Math.random() - .5) * 1.4;
+            player.z += (Math.random() - .5) * 1.4;
+            if (state.health <= 0) gameOver();
+        }
+
+        function updateItems(dt) { items.forEach(i => { i.rotation.y += dt * 1.8; i.position.y = .6 + Math.sin(performance.now() * .003 + i.position.x) * .08; }); }
+        function updateHUD() {
+            ui.night.textContent = `Night ${state.night}`;
+            ui.held.textContent = state.held ? state.held.name : 'Nothing';
+            ui.stamina.style.width = `${state.stamina}%`;
+            ui.battery.style.width = `${state.battery}%`;
+            if (state.mode === 'accomplice') {
+                ui.task.textContent = `Accomplice: ${state.kills}/20 monsters killed. Ammo ${state.ammo}. Health ${state.health}/5.`;
+            } else {
+                ui.task.textContent = `${state.installed.size}/5 generator parts installed. ${state.mode === 'practice' ? 'Practice: monsters will not catch you.' : (state.rage ? 'RED EYES: they are faster.' : 'Stay quiet. Use lockers if chased.')}`;
+            }
+        }
+        function flash(text) { ui.prompt.style.display = 'block'; ui.prompt.innerHTML = text; }
+        function nextNight() {
+            state.night++;
+            if (state.night > 5) return gameOver();
+            player.set(0, 1.6, 11.2); state.hidden = false; state.safeTimer = 3; monsters.forEach((m, i) => { m.group.position.set(i ? -6 : 5, 0, i ? -5 : 6); m.target.copy(player); m.catchCooldown = 2; });
+            flash(`Night ${state.night}`);
+        }
+        function caughtBy(name) {
+            flash(`${name} caught you. Night ${Math.min(state.night + 1, 5)} begins.`);
+            nextNight();
+        }
+        function gameOver() { state.running = false; hideScreens(); ui.hud.classList.remove('active'); ui.dead.classList.add('active'); document.exitPointerLock?.(); }
+        function win() { state.running = false; hideScreens(); ui.hud.classList.remove('active'); ui.win.classList.add('active'); document.exitPointerLock?.(); }
+        addEventListener('resize', () => { if (!renderer) return; camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+    </script>
+</body>
+</html>
